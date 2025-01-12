@@ -2,8 +2,10 @@ import os
 import random
 import threading
 import time
+from io import StringIO
 
 import django
+from django.db import transaction
 from django.utils import timezone
 
 import buttons
@@ -23,8 +25,11 @@ def check_subscribes():
             for task in user.tasks.all():
                 if timezone.now().timestamp() < task.end_time.timestamp():
                     if not check_subscribe(chat_id=user.chat_id, channel_id=task.task.channel_id):
-                        bot.send_message(chat_id=user.chat_id,
-                                         text=f'С вашего баланса списано {task.task.reward}⭐️ за отписку от канала в течении 24 часов')
+                        try:
+                            bot.send_message(chat_id=user.chat_id,
+                                             text=f'С вашего баланса списано {task.task.reward}⭐️ за отписку от канала в течении 24 часов')
+                        except Exception:
+                            pass
                         user.balance -= task.task.reward
                         user.save(update_fields=['balance'])
                         task.delete()
@@ -42,11 +47,14 @@ def null_day_ref():
 
 
 def check_subscribe(chat_id, channel_id):
+    task = Task.objects.get(channel_id==channel_id)
     try:
+        if task.is_close:
+            return True
         n = bot.get_chat_member(chat_id=channel_id, user_id=chat_id)
         if n.status == 'left':
             return False
-    except Exception:
+    except Exception as e:
         return False
     return True
 
@@ -63,28 +71,39 @@ def check_start_subscrbe(user):
 
 
 def not_subscribed(chat_id):
-    bot.send_message(chat_id=chat_id, text='Вам необходимо подписаться на канал, чтобы пользоваться ботом.',
+    try:
+        bot.send_message(chat_id=chat_id, text='Вам необходимо подписаться на канал, чтобы пользоваться ботом.',
                      reply_markup=buttons.not_subscribed())
+    except Exception:
+        pass
 
 
 def tasks(chat_id):
     text = '✅Выполняй задания и получай за это звезды 🌟'
-    bot.send_photo(chat_id=chat_id, photo=open('photos/task.jpg', 'rb'), caption=text, reply_markup=buttons.tasks())
+    try:
+        bot.send_photo(chat_id=chat_id, photo=open('photos/task.jpg', 'rb'), caption=text, reply_markup=buttons.tasks())
+    except Exception:
+        pass
 
 
 def detail_task(chat_id, task_id):
     text = '🎯Доступно задание подписаться!'
-    bot.send_message(chat_id=chat_id, text=text, reply_markup=buttons.task_dtail(task_id))
+    try:
+        bot.send_message(chat_id=chat_id, text=text, reply_markup=buttons.task_dtail(task_id))
+    except Exception:
+        pass
 
 
 def collect_stars(chat_id):
-    reward = Refferal_reward.objects.all().first().reward
+    reward = str(Refferal_reward.objects.all().first().reward).replace('.', ',')
     text = f'Получи {reward} ⭐️ за каждого приглашенного тобой пользователя‼️\n\n' \
            f'По ней ты должен приглашать друзей/знакомых 💫\n' \
            f'Ну или отправлять свою ссылку различных чатах\n' \
            f'Твоя реферальная ссылка 🔗: `https://t.me/{bot.get_me().username}?start={chat_id}`'
-
-    bot.send_photo(chat_id=chat_id, photo=open('photos/collect_stars.jpg', 'rb'), caption=text, parse_mode='MarkDownV2')
+    try:
+        bot.send_photo(chat_id=chat_id, photo=open('photos/collect_stars.jpg', 'rb'), caption=text, parse_mode='MarkDownV2')
+    except Exception:
+        pass
 
 
 @bot.message_handler(commands=['start'])
@@ -92,20 +111,36 @@ def start(message):
     username = message.from_user.username
     if not username:
         username = 'Анонимный пользователь'
-    user, _ = User.objects.get_or_create(chat_id=message.from_user.id, username=username)
+    try:
+        user, _ = User.objects.get_or_create(chat_id=message.from_user.id, username=username)
+    except Exception:
+        user = User.objects.filter(chat_id=message.from_user.id).first()
+        _ = False
     if _ and len(message.text.split()) == 2:
         ref = User.objects.filter(chat_id=message.text.split()[1]).first()
         if ref:
+            reward = Refferal_reward.objects.all().first().reward
             ref.referral.add(user)
             ref.referral_count += 1
             ref.referral_per_day += 1
-            ref.balance += Refferal_reward.objects.all().first().reward
-            ref.save(update_fields=['referral_count', 'referral_per_day'])
+            ref.balance += reward
+            ref.save(update_fields=['referral_count', 'referral_per_day', 'balance'])
+            text = '📨 По твоей реферальной ссылке зарегистрировался\n' \
+                   f'@{username}\n\n' \
+                   f'- На твой баланс зачислено {reward} ⭐️'
+            try:
+                bot.send_message(chat_id=ref.chat_id, text=text)
+            except Exception:
+                pass
     not_subscribed(chat_id=user.chat_id)
 
 
 def menu(chat_id):
-    bot.send_message(chat_id=chat_id, text='Главное меню', reply_markup=buttons.buttons())
+    try:
+        bot.send_message(chat_id=chat_id, text='Главное меню', reply_markup=buttons.buttons())
+    except Exception:
+        pass
+
 
 
 def top(chat_id, param, text):
@@ -114,46 +149,62 @@ def top(chat_id, param, text):
     if 'все время' in text:
         for i, user in enumerate(users, start=1):
             text += f'{i}. @{user.username} - {user.referral_count} рефералов\n'
-        bot.send_photo(chat_id=chat_id, photo=open('photos/top.jpg', 'rb'), caption=text)
+        try:
+            bot.send_photo(chat_id=chat_id, photo=open('photos/top.jpg', 'rb'), caption=text)
+        except Exception:
+            pass
     else:
         for i, user in enumerate(users, start=1):
             text += f'{i}. @{user.username} - {user.referral_per_day} рефералов\n'
-        bot.send_photo(chat_id=chat_id, photo=open('photos/top_24.jpg', 'rb'), caption=text)
+        try:
+            bot.send_photo(chat_id=chat_id, photo=open('photos/top_24.jpg', 'rb'), caption=text)
+        except Exception:
+            pass
 
 
 def profile(user):
     text = f'👤Мой профиль\n\n'
     text += f'Статистика ⤵️\n\n'
     text += f'✨ Приглашенных за 24 часа:: {user.referral_per_day}\n\n'
-    text += f'📈 Приглашенных за все время: {user.referral_per_day}\n\n'
-    text += f'🌟Баланс: 🌟 {round(user.balance, 2)}⭐️️\n\n'
-    bot.send_photo(chat_id=user.chat_id, photo=open('photos/profile.jpg', 'rb'), caption=text)
+    text += f'📈 Приглашенных за все время: {user.referral_count}\n\n'
+    text += f'🌟Баланс: {round(user.balance, 2)}⭐️️\n\n'
+    try:
+        bot.send_photo(chat_id=user.chat_id, photo=open('photos/profile.jpg', 'rb'), caption=text)
+    except Exception:
+        pass
 
 
 def exit_stars(message, user):
     if message.content_type == 'text':
         if message.text in ['Заработать звезды ⭐', 'Профиль 👤', 'рассылка', 'Топ пользователей 📊', 'Задания 📚',
-                            'Вывести звезды 🌟', 'Промокод 🎁', 'Ежедневный бонус ⏰']:
+                            'Вывести звезды 🌟', 'Промокод 🎁', 'Ежедневный бонус ⏰', 'id']:
             text_handler(None, message.text, user.chat_id)
         else:
             try:
-                error = 'Мы выводим только выводы на суммы: 15 ⭐️, 25 ⭐️, 50 ⭐️, 100 ⭐️ и выше'
+                error = 'Мы выводим только выводы на суммы: 50 ⭐️ и выше'
                 stars = int(message.text)
                 if stars > user.balance:
                     error = 'У вас недостаточно звезд на балансе'
                     raise Exception
-                if stars < 100 and stars not in [15, 25, 50, 100]:
+                if stars < 50:
                     raise Exception
             except Exception:
-                msg = bot.send_message(chat_id=user.chat_id, text=error, reply_markup=buttons.go_to_menu())
-                bot.register_next_step_handler(msg, exit_stars, user)
+                try:
+                    msg = bot.send_message(chat_id=user.chat_id, text=error, reply_markup=buttons.go_to_menu())
+                    bot.register_next_step_handler(msg, exit_stars, user)
+                except Exception:
+                    pass
             else:
                 user.balance -= stars
                 user.freeze_balance += stars
                 user.save(update_fields=['balance', 'freeze_balance'])
                 admin = random.choice(User.objects.filter(is_admin=True))
-                bot.send_message(chat_id=admin.chat_id, text=f'Заявка на вывод {stars}⭐️',
-                                 reply_markup=buttons.admin_message(stars=stars, chat_id=user.chat_id))
+                try:
+                    bot.send_message(chat_id=admin.chat_id, text=f'Заявка на вывод {stars}⭐️',
+                                     reply_markup=buttons.admin_message(stars=stars, chat_id=user.chat_id))
+                    bot.send_message(chat_id=user.chat_id, text='Ожидайте пополнения в течении 24 часов 🚀')
+                except Exception:
+                    pass
 
 
 def mailing(message):
@@ -169,7 +220,7 @@ def mailing(message):
 def promocode(message, user):
     if message.content_type == 'text':
         if message.text in ['Заработать звезды ⭐', 'Профиль 👤', 'рассылка', 'Топ пользователей 📊', 'Задания 📚',
-                            'Вывести звезды 🌟', 'Промокод 🎁', 'Ежедневный бонус ⏰']:
+                            'Вывести звезды 🌟', 'Промокод 🎁', 'Ежедневный бонус ⏰', 'id']:
             text_handler(None, message.text, user.chat_id)
         else:
             promocode = message.text
@@ -177,7 +228,7 @@ def promocode(message, user):
                 promo = Promocode.objects.get(name=promocode)
                 if user in promo.users.all():
                     bot.send_message(chat_id=user.chat_id, text='Промокод уже использован')
-                else:
+                elif user.referral_per_day >= promo.min_referral:
                     promo.users.add(user)
                     user.balance += promo.reward
                     user.save(update_fields=['balance'])
@@ -185,29 +236,65 @@ def promocode(message, user):
                                      text=f'Промокод успешно использован!\nВам начислено {promo.reward}⭐️')
                     if promo.users.all().count() == promo.max_user:
                         promo.delete()
+                elif user.referral_per_day < promo.min_referral:
+                    bot.send_message(chat_id=user.chat_id,
+                                     text=f'Вам нужно привести минимум {promo.min_referral} рефералов для использования промокода')
             except Exception:
-                bot.send_message(chat_id=user.chat_id, text='Промокод не найден')
+                try:
+                    bot.send_message(chat_id=user.chat_id, text='Промокод не найден')
+                except Exception:
+                    pass
 
 
 def day_bonus(user):
     day_bonus = DayReward.objects.get(id=1)
-    if user.referral_per_day >= day_bonus.min_referral:
+    if user.referral_per_day >= day_bonus.min_referral and not user.use_day_bonus:
         user.balance += day_bonus.reward
         user.use_day_bonus = True
         user.save(update_fields=['balance', 'use_day_bonus'])
-        bot.send_photo(chat_id=user.chat_id, photo=open('photos/day_bonus.jpg', 'rb'),
-                       caption=f'🎁 Вы получили ежедневный бонус в размере {day_bonus.reward} звезды 🌟️')
+        try:
+            bot.send_photo(chat_id=user.chat_id, photo=open('photos/day_bonus.jpg', 'rb'),
+                           caption=f'🎁 Вы получили ежедневный бонус в размере {day_bonus.reward} звезды 🌟️')
+        except Exception:
+            pass
     else:
-        bot.send_photo(chat_id=user.chat_id, photo=open('photos/day_bonus.jpg', 'rb'),
-                       caption=f'🎁 Пригласи {day_bonus.min_referral} друзей и получи ежедневный бонус в размере {day_bonus.reward} звезды 🌟')
+        try:
+            bot.send_photo(chat_id=user.chat_id, photo=open('photos/day_bonus.jpg', 'rb'),
+                           caption=f'🎁 Пригласи {day_bonus.min_referral} друзей и получи ежедневный бонус в размере {day_bonus.reward} звезды 🌟')
+        except Exception:
+            pass
 
 
+def get_user_ids(chat_id, chunk_size=1000):  # Chunk size можно настраивать
+    """
+    Получает идентификаторы пользователей и отправляет их в чат в виде файла.
+
+    Использует потоковую передачу данных, избегая загрузки всех пользователей в память.
+    """
+
+    output = StringIO()
+
+    with transaction.atomic():
+        users = User.objects.all().values_list('chat_id', flat=True).iterator(chunk_size=chunk_size)
+
+        for user_id in users:
+            output.write(f'{user_id}\n')
+
+    output.seek(0)  # Перемещаемся в начало "файла"
+
+    try:
+        bot.send_document(chat_id=chat_id, document=("users.txt", output.read()), caption='IDшники пользователей')
+
+    except Exception as e:
+        print(f"Error sending document: {e}")
+    finally:
+        output.close()
 @bot.message_handler(content_types='text')
 def text_handler(message, command=None, chat_id=None):
     if not command:
         chat_id = message.from_user.id
         command = message.text
-    user = User.objects.get(chat_id=chat_id)
+    user = User.objects.filter(chat_id=chat_id).first()
     if not check_start_subscrbe(user):
         not_subscribed(chat_id=chat_id)
     elif command == 'Заработать звезды ⭐️':
@@ -215,23 +302,37 @@ def text_handler(message, command=None, chat_id=None):
     elif command == 'Профиль 👤':
         profile(user)
     elif command == 'Топ пользователей 📊':
-        bot.send_message(chat_id=chat_id, text='Выбери какую статистику хочешь посмотреть👇', reply_markup=buttons.top())
+        try:
+            bot.send_message(chat_id=chat_id, text='Выбери какую статистику хочешь посмотреть👇', reply_markup=buttons.top())
+        except Exception:
+            pass
     elif command == 'Задания 📚':
         tasks(chat_id=chat_id)
     elif command == 'Вывести звезды 🌟':
-        text = "💳 Минимальная сумма вывода: 15⭐️\n\n" \
-               f"Так-же мы выводим только выводы на суммы: 15 ⭐️, 25 ⭐️, 50 ⭐️, 100 ⭐️ и выше\n\n" \
-               f"❗️Если ваш вывод на другую сумму, он будет отклонен админом❗️\n\n" \
+        text = "💳 Минимальная сумма вывода: 50⭐️\n\n" \
+               f"Увеличили сумму для минимального вывода для того, что бы вы получали вывод без комиссии!\n" \
+               f"❗️Стараемся для вас дорогие❗️\n\n" \
                "‼️Введите вашу сумму звезд, которую желаете вывести:"
-        msg = bot.send_photo(chat_id=chat_id, photo=open('photos/exit_stars.jpg', 'rb'), caption=text)
-        bot.register_next_step_handler(msg, exit_stars, user)
+        try:
+            msg = bot.send_photo(chat_id=chat_id, photo=open('photos/exit_stars.jpg', 'rb'), caption=text)
+            bot.register_next_step_handler(msg, exit_stars, user)
+        except Exception:
+            pass
     elif command == 'рассылка' and user.is_admin:
-        msg = bot.send_message(chat_id=chat_id, text='Введите текст рассылки')
-        bot.register_next_step_handler(msg, mailing)
+        try:
+            msg = bot.send_message(chat_id=chat_id, text='Введите текст рассылки')
+            bot.register_next_step_handler(msg, mailing)
+        except Exception:
+            pass
+    elif command == 'id' and user.is_admin:
+        get_user_ids(chat_id)
     elif command == 'Промокод 🎁':
-        msg = bot.send_photo(chat_id=chat_id, photo=open('photos/promo.jpg', 'rb'),
-                             caption='✨Введите промокод, и получите от нас бонус 🎁')
-        bot.register_next_step_handler(msg, promocode, user)
+        try:
+            msg = bot.send_photo(chat_id=chat_id, photo=open('photos/promo.jpg', 'rb'),
+                                 caption='✨Введите промокод, и получите от нас бонус 🎁')
+            bot.register_next_step_handler(msg, promocode, user)
+        except Exception:
+            pass
     elif command == 'Ежедневный бонус ⏰':
         day_bonus(user)
     elif command == '122222':
@@ -241,31 +342,40 @@ def text_handler(message, command=None, chat_id=None):
 @bot.callback_query_handler(func=lambda call: True)
 def callback(call):
     chat_id = call.message.chat.id
-    user, _ = User.objects.get_or_create(chat_id=chat_id)
+    user = User.objects.filter(chat_id=chat_id).first()
     if call.message:
         data = call.data.split('|')
         bot.clear_step_handler_by_chat_id(chat_id=chat_id)
         if not check_start_subscrbe(user):
             not_subscribed(chat_id=chat_id)
-        if data[0] == 'check_start_subsctibes':
+        elif data[0] == 'check_start_subsctibes':
             menu(chat_id=chat_id)
         elif data[0] == 'task':
             detail_task(chat_id=chat_id, task_id=data[1])
         elif data[0] == 'check_subsctibe':
             task = Task.objects.get(id=data[1])
-            if check_subscribe(chat_id=chat_id, channel_id=task.channel_id):
+            n = check_subscribe(chat_id=chat_id, channel_id=task.channel_id)
+            if n:
                 if not user.tasks.filter(task=task).exists():
                     user.tasks.add(UserTask.objects.create(task=task))
                     reward = task.reward
                     user.balance += reward
-                    user.save(update_fields=['balance'])
-                    bot.send_message(chat_id=chat_id, text='Баланс успешно пополнен')
+                    try:
+                        bot.send_message(chat_id=chat_id, text=f'Поздравляю, вам зачислено на баланс {reward} ⭐️')
+                    except Exception:
+                        pass
                 else:
-                    bot.send_message(chat_id=chat_id, text='Вы уже сделали это задание')
+                    try:
+                        bot.send_message(chat_id=chat_id, text='Вы уже сделали это задание')
+                    except Exception:
+                        pass
                 time.sleep(1)
                 tasks(chat_id=chat_id)
             else:
-                bot.send_message(chat_id=chat_id, text='Вам нужно подписаться на канал')
+                try:
+                    bot.send_message(chat_id=chat_id, text='Вам нужно подписаться на канал')
+                except Exception:
+                    pass
                 time.sleep(1)
                 detail_task(chat_id=chat_id, task_id=data[1])
         elif data[0] == 'tasks':
@@ -277,17 +387,27 @@ def callback(call):
         elif data[0] == 'back':
             menu(chat_id=chat_id)
         elif data[0] == 'approve':
-            usr = User.objects.get(chat_id=data[1])
+            bot.delete_message(chat_id=chat_id, message_id=call.message.id)
+            usr = User.objects.filter(chat_id=data[1]).first()
             usr.freeze_balance -= int(data[2])
             usr.save(update_fields=['freeze_balance'])
-            bot.send_message(chat_id=usr.chat_id, text='Ваша заявка на вывод одобрена✅'
-                                                       'Ожидайте пополнения в течении 24 часов 🚀')
+            try:
+                bot.send_message(chat_id=chat_id, text=f'Вы сделали вывод пользователю @{usr.username} на сумму {data[2]}⭐️')
+                bot.send_message(chat_id=usr.chat_id, text='Ваша заявка на вывод одобрена✅')
+            except Exception:
+                pass
         elif data[0] == 'cansel':
-            usr = User.objects.get(chat_id=data[1])
+            bot.delete_message(chat_id=chat_id, message_id=call.message.id)
+            usr = User.objects.filter(chat_id=data[1]).first()
             usr.freeze_balance -= int(data[2])
             usr.balance += int(data[2])
             usr.save(update_fields=['freeze_balance', 'balance'])
-            bot.send_message(chat_id=usr.chat_id, text='Ваша заявка на вывод отклонена')
+            try:
+                bot.send_message(chat_id=chat_id,
+                                 text=f'Вы отказали в вывод пользователю @{usr.username} на сумму {data[2]}⭐️')
+                bot.send_message(chat_id=usr.chat_id, text='Ваша заявка на вывод отклонена')
+            except Exception:
+                pass
 
 
 if __name__ == '__main__':

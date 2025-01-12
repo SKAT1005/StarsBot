@@ -25,8 +25,8 @@ def buttons():
 def not_subscribed():
     markup = InlineKeyboardMarkup(row_width=2)
     buttons = []
-    for task in Task.objects.filter(is_first_task=True):
-        tasks = InlineKeyboardButton(text=f'Спонсор №{task.id}', url=task.url)
+    for _, task in enumerate(Task.objects.filter(is_first_task=True), start=1):
+        tasks = InlineKeyboardButton(text=f'Спонсор №{_}', url=task.url)
         buttons.append(tasks)
 
     # Разделяем список кнопок на ряды по два элемента
@@ -41,7 +41,7 @@ def tasks():
     markup = InlineKeyboardMarkup(row_width=2)
     buttons = []
     for task in Task.objects.filter(is_first_task=False):
-        tasks = InlineKeyboardButton(text=f'Спонсор №{task.id}', url=task.url)
+        tasks = InlineKeyboardButton(text=f'Спонсор №{task.id}', callback_data=f'task|{task.id}')
         buttons.append(tasks)
 
     # Разделяем список кнопок на ряды по два элемента

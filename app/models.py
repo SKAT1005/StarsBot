@@ -32,6 +32,7 @@ class Task(models.Model):
     url = models.URLField(verbose_name='Ссылка на канал, на который надо подписаться')
     channel_id = models.CharField(max_length=128, verbose_name='ID канала')
     reward = models.FloatField(default=0, verbose_name='Награда за задание')
+    is_close = models.BooleanField(default=False, verbose_name='Закрытый ли канал?')
     is_first_task = models.BooleanField(default=False, verbose_name='Явяляется ли это задание необходимым для входа в бота?')
 
 
@@ -49,4 +50,4 @@ class Promocode(models.Model):
     reward = models.IntegerField(default=10, verbose_name='Награда за промокод')
     max_user = models.IntegerField(default=100, verbose_name='Количество использований')
     min_referral = models.IntegerField(default=0, verbose_name='Минимальное количество рефералов')
-    users = models.ManyToManyField('User', verbose_name='Пользователи, использовавшие промокод')
+    users = models.ManyToManyField('User', blank=True, verbose_name='Пользователи, использовавшие промокод')
