@@ -47,7 +47,7 @@ def null_day_ref():
 
 
 def check_subscribe(chat_id, channel_id):
-    task = Task.objects.get(channel_id==channel_id)
+    task = Task.objects.filter(channel_id=channel_id).first()
     try:
         if task.is_close:
             return True
@@ -79,7 +79,7 @@ def not_subscribed(chat_id):
 
 
 def tasks(chat_id):
-    text = '✅Выполняй задания и получай за это звезды 🌟'
+    text = 'Актуальные Задания📚'
     try:
         bot.send_photo(chat_id=chat_id, photo=open('photos/task.jpg', 'rb'), caption=text, reply_markup=buttons.tasks())
     except Exception:
@@ -96,9 +96,9 @@ def detail_task(chat_id, task_id):
 
 def collect_stars(chat_id):
     reward = str(Refferal_reward.objects.all().first().reward).replace('.', ',')
-    text = f'Получи {reward} ⭐️ за каждого приглашенного тобой пользователя‼️\n\n' \
+    text = f'+ {reward} ⭐️ за каждого приглашенного тобой пользователя 🎃\n\n' \
            f'По ней ты должен приглашать друзей/знакомых 💫\n' \
-           f'Ну или отправлять свою ссылку различных чатах\n' \
+           f'Ну или отправлять свою ссылку в различных чатах\n' \
            f'Твоя реферальная ссылка 🔗: `https://t.me/{bot.get_me().username}?start={chat_id}`'
     try:
         bot.send_photo(chat_id=chat_id, photo=open('photos/collect_stars.jpg', 'rb'), caption=text, parse_mode='MarkDownV2')
@@ -145,7 +145,7 @@ def menu(chat_id):
 
 def top(chat_id, param, text):
     users = list(User.objects.all().order_by(f'-{param}'))[:10]
-    text = f'Топ 10 рефералов за {text}:\n\n'
+    text = f'🏆Топ 10 рефералов за {text}:\n\n'
     if 'все время' in text:
         for i, user in enumerate(users, start=1):
             text += f'{i}. @{user.username} - {user.referral_count} рефералов\n'
@@ -163,11 +163,10 @@ def top(chat_id, param, text):
 
 
 def profile(user):
-    text = f'👤Мой профиль\n\n'
-    text += f'Статистика ⤵️\n\n'
-    text += f'✨ Приглашенных за 24 часа:: {user.referral_per_day}\n\n'
-    text += f'📈 Приглашенных за все время: {user.referral_count}\n\n'
-    text += f'🌟Баланс: {round(user.balance, 2)}⭐️️\n\n'
+    text = f'👤Пользователь\n\n'
+    text += f'➕Приглашено друзей за 24 часа: {user.referral_per_day}\n\n'
+    text += f'📊Приглашено друзей за все время: {user.referral_count}\n\n'
+    text += f'🏦Баланс: {round(user.balance, 2)}⭐️️\n\n'
     try:
         bot.send_photo(chat_id=user.chat_id, photo=open('photos/profile.jpg', 'rb'), caption=text)
     except Exception:
@@ -309,10 +308,9 @@ def text_handler(message, command=None, chat_id=None):
     elif command == 'Задания 📚':
         tasks(chat_id=chat_id)
     elif command == 'Вывести звезды 🌟':
-        text = "💳 Минимальная сумма вывода: 50⭐️\n\n" \
-               f"Увеличили сумму для минимального вывода для того, что бы вы получали вывод без комиссии!\n" \
-               f"❗️Стараемся для вас дорогие❗️\n\n" \
-               "‼️Введите вашу сумму звезд, которую желаете вывести:"
+        text = "💳 Минимальная сумма вывода: 40⭐️\n\n" \
+               f"Так-же мы выводим суммы более 40⭐️\n\n" \
+               "Введите вашу сумму звезд, которую желаете вывести:"
         try:
             msg = bot.send_photo(chat_id=chat_id, photo=open('photos/exit_stars.jpg', 'rb'), caption=text)
             bot.register_next_step_handler(msg, exit_stars, user)
